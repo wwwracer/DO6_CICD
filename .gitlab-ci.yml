@@ -1,0 +1,57 @@
+default:
+  tags: [test]
+stages:          # List of stages for jobs, and their order of execution
+  - build
+  - style-test
+  - test
+  - deploy
+
+building:
+  stage: build
+  script:
+    - echo "Build run"
+    - cd src/cat/
+    - make s21_cat
+    - chmod 744 tests.sh s21_cat
+    - cd ../grep/
+    - make s21_grep
+    - chmod 744 tests.sh s21_grep
+    - echo "Build is done"
+  after_script:
+    - bash src/bot.sh
+  artifacts:
+    paths:
+      - src/cat
+      - src/grep
+    expire_in: 30 days
+
+style_test_run:
+  stage: style-test
+  script:
+  - echo "Check style run"
+  - clang-format -i -style=google src/**/*.c src/**/*.h 
+  after_script:
+    - bash src/bot.sh
+
+tests_run:
+  stage: test
+  script:
+    - echo "Bash tests run"
+    - cd src/cat/
+    - cat_out=$(bash tests.sh)
+    - cat_fail=$(echo "$cat_out" | grep "FAIL:" | awk '{print $2}')
+    - cd ../grep/
+    - grep_out=$(bash tests.sh)
+    - grep_fail=$(echo "$grep_out" | grep "FAIL:" | awk '{print $2}')
+    - if [[ $cat_fail > 0 ]] || [[ $grep_fail != 0 ]]; then exit 1; fi
+  after_script:
+    - bash src/bot.sh
+
+deploy:
+  stage: deploy
+  script:
+    - cd src
+    - bash deploy.sh
+  when: manual
+  after_script:
+    - bash src/bot.sh
